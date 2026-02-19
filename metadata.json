@@ -1,0 +1,5 @@
+{
+  "name": "CineStream AI",
+  "description": "An AI-powered cinema discovery platform using Gemini to find your favorite movies and TV shows, with seamless embedding via AutoEmbed.",
+  "requestFramePermissions": []
+}
