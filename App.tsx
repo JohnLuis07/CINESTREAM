@@ -61,7 +61,7 @@ const App: React.FC = () => {
       <nav className="fixed top-0 z-40 w-full bg-black/60 backdrop-blur-xl border-b border-white/5 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.reload()}>
           <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-bold text-xl italic shadow-[0_0_15px_rgba(220,38,38,0.5)]">C</div>
-          <h1 className="text-xl font-bold tracking-tighter text-white">CINESTREAM <span className="text-red-600">AI</span></h1>
+          <h1 className="text-xl font-bold tracking-tighter text-white">CINESTREAM by <span className="text-red-600">Luis</span></h1>
         </div>
         
         <form onSubmit={handleSearch} className="relative w-full max-w-md hidden md:block">
@@ -258,7 +258,7 @@ const App: React.FC = () => {
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-center gap-2 mb-8 grayscale opacity-50">
             <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center font-bold text-xs italic">C</div>
-            <h1 className="text-lg font-bold tracking-tighter text-white">CINESTREAM AI</h1>
+            <h1 className="text-lg font-bold tracking-tighter text-white">CINESTREAM by Luis</h1>
           </div>
           <p className="mb-6 leading-relaxed max-w-xl mx-auto">Discover and stream with ease. We leverage Gemini for semantic search and AutoEmbed for reliable content delivery.</p>
           <div className="flex justify-center gap-8 mb-10 font-bold text-xs uppercase tracking-[0.2em]">
