@@ -260,7 +260,7 @@ const App: React.FC = () => {
             <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center font-bold text-xs italic">C</div>
             <h1 className="text-lg font-bold tracking-tighter text-white">CINESTREAM by Luis</h1>
           </div>
-          <p className="mb-6 leading-relaxed max-w-xl mx-auto">Discover and stream with ease. We leverage Gemini for semantic search and AutoEmbed for reliable content delivery.</p>
+          <p className="mb-6 leading-relaxed max-w-xl mx-auto">Discover and stream with ease. We leverage AI for semantic search and AutoEmbed for reliable content delivery.</p>
           <div className="flex justify-center gap-8 mb-10 font-bold text-xs uppercase tracking-[0.2em]">
             <a href="#" className="hover:text-red-600 transition-colors">Privacy</a>
             <a href="#" className="hover:text-red-600 transition-colors">Terms</a>
