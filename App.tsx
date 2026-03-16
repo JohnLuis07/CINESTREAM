@@ -266,7 +266,7 @@ const App: React.FC = () => {
             <a href="#" className="hover:text-red-600 transition-colors">Terms</a>
             <a href="#" className="hover:text-red-600 transition-colors">API Docs</a>
           </div>
-          <p className="text-[10px] text-neutral-700 font-bold tracking-widest uppercase">&copy; 2025 CineStream AI. Not affiliated with TMDB.</p>
+          <p className="text-[10px] text-neutral-700 font-bold tracking-widest uppercase">&copy; 2026 CineStream by Luis. Not affiliated with TMDB.</p>
         </div>
       </footer>
     </div>
