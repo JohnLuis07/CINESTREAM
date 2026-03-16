@@ -209,7 +209,7 @@ const App: React.FC = () => {
               <div className="relative z-10 flex flex-col md:flex-row items-center gap-12">
                 <div className="flex-1">
                   <h2 className="text-4xl md:text-6xl font-black text-white mb-6 leading-tight tracking-tighter">AI-POWERED <br/> DISCOVERY</h2>
-                  <p className="text-neutral-400 text-lg mb-8 max-w-lg leading-relaxed font-medium">CineStream uses Gemini to understand complex moods and niche requests. Find the perfect movie by simply describing it.</p>
+                  <p className="text-neutral-400 text-lg mb-8 max-w-lg leading-relaxed font-medium">CineStream by Luis uses AI to understand complex moods and niche requests. Find the perfect movie by simply describing it.</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {['Moody sci-fi like Blade Runner', 'Uplifting true stories', 'Neon-lit cyberpunk action', 'Slow burn mystery'].map(tag => (
                       <button 
