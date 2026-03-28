@@ -1,5 +1,5 @@
 import { MediaItem } from "../types";
-import { GoogleGenerativeAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 export interface SearchResult {
   items: MediaItem[];
@@ -7,7 +7,7 @@ export interface SearchResult {
 }
 
 const API_KEY = (process.env.GEMINI_API_KEY as string) || "";
-const genAI = new GoogleGenerativeAI(API_KEY);
+const client = new GoogleGenAI({ apiKey: API_KEY });
 
 // Keyless search using TVMaze (for TV) and a community IMDb wrapper (for Movies)
 export const searchMedia = async (query: string): Promise<SearchResult> => {
@@ -106,16 +106,16 @@ export const searchMediaWithAI = async (query: string): Promise<SearchResult> =>
   }
 
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-    });
-
     const prompt = `Search for movies or TV shows matching this description: "${query}". 
     Return a JSON array of objects with fields: title, type (movie or tv), year, overview, imdb_id. 
     Focus on popular and recent titles. Limit to 6 results. 
     Only return the JSON array, no other text.`;
 
-    const result = await model.generateContent(prompt);
+    const result = await client.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+    });
+
     const text = result.response.text();
     
     const jsonMatch = text.match(/\[.*\]/s);
