@@ -12,7 +12,7 @@ interface TVDetails {
 }
 
 const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
-  const [server, setServer] = useState<'2Embed - Vpls' | 'SuperEmbed' | 'Embed.su' | 'Vidsrc.xyz'>('Vidsrc.xyz');
+  const [server, setServer] = useState<'Vsrc' | '2Embed' | 'SuperEmbed' | 'Embed.su' | 'Vidsrc.to'>('Vsrc');
   const [season, setSeason] = useState(config.season || 1);
   const [episode, setEpisode] = useState(config.episode || 1);
   const [tvDetails, setTvDetails] = useState<TVDetails | null>(null);
@@ -129,7 +129,11 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
     const targetSeason = season;
     
     switch (server) {
-      case '2Embed - Vpls':
+      case 'Vsrc':
+        return config.type === 'movie'
+          ? `https://vidsrc.xyz/embed/movie?imdb=${id}`
+          : `https://vidsrc.xyz/embed/tv?imdb=${id}&season=${targetSeason}&episode=${episode}`;
+      case '2Embed':
         return config.type === 'movie'
           ? `https://www.2embed.cc/embed/${id}`
           : `https://www.2embed.cc/embedtv/${id}&s=${targetSeason}&e=${episode}`;
@@ -141,12 +145,12 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
         return config.type === 'movie'
           ? `https://embed.su/embed/movie/${id}`
           : `https://embed.su/embed/tv/${id}/${targetSeason}/${episode}`;
-      case 'Vidsrc.xyz':
+      case 'Vidsrc.to':
         return config.type === 'movie'
-          ? `https://vidsrc.xyz/embed/movie?imdb=${id}`
-          : `https://vidsrc.xyz/embed/tv?imdb=${id}&season=${targetSeason}&episode=${episode}`;
+          ? `https://vidsrc.to/embed/movie/${id}`
+          : `https://vidsrc.to/embed/tv/${id}/${targetSeason}/${episode}`;
       default:
-        return `https://www.2embed.cc/embed/${id}`;
+        return `https://vidsrc.xyz/embed/movie?imdb=${id}`;
     }
   };
 
@@ -160,7 +164,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
               <span className="w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-red-600 animate-pulse"></span>
               SOURCES
             </span>
-            {(['2Embed - Vpls', 'SuperEmbed', 'Embed.su', 'Vidsrc.xyz'] as const).map((s) => (
+            {(['Vsrc', '2Embed', 'SuperEmbed', 'Embed.su', 'Vidsrc.to'] as const).map((s) => (
               <button 
                 key={s}
                 onClick={() => setServer(s)}
@@ -245,7 +249,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
         </div>
 
         <div className="p-3 md:p-4 bg-black/60 text-[8px] md:text-[10px] text-center text-neutral-500 uppercase tracking-[0.2em] md:tracking-[0.25em] font-black">
-          Anime Correction Index • Vidsrc Default • Metadata Verified
+          Anime Correction Index • 2Embed Default (Vsrc) • Metadata Verified
         </div>
       </div>
       
