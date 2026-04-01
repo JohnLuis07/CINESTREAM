@@ -6,152 +6,142 @@ export interface SearchResult {
   sources: { title: string; uri: string }[];
 }
 
-const API_KEY = (process.env.GEMINI_API_KEY as string) || "";
-const client = new GoogleGenAI({ apiKey: API_KEY });
+const GEMINI_KEY = (process.env.GEMINI_API_KEY as string) || "";
+const client = new GoogleGenAI({ apiKey: GEMINI_KEY });
 
-// Keyless search using TVMaze (for TV) and a community IMDb wrapper (for Movies)
-export const searchMedia = async (query: string): Promise<SearchResult> => {
-  const items: MediaItem[] = [];
-  const sources: { title: string; uri: string }[] = [];
+const TMDB_FALLBACKS = [
+  "e547e17d4e91f3e62a571655cd1ccaff",
+  "15d1a681301b354e3e35b7067a929822",
+  "8d6d91abc388a1161130f9063c691c8d"
+];
 
-  try {
-    // 1. Search TV Shows via TVMaze (No Key)
-    try {
-      const tvResponse = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
-      if (tvResponse.ok) {
-        const tvData = await tvResponse.json();
-        if (Array.isArray(tvData)) {
-          tvData.slice(0, 5).forEach((result: any) => {
-            const show = result.show;
-            if (show.externals?.imdb) {
-              items.push({
-                id: show.externals.imdb,
-                title: show.name,
-                type: 'tv',
-                year: show.premiered ? show.premiered.split('-')[0] : 'N/A',
-                overview: show.summary ? show.summary.replace(/<[^>]*>?/gm, '').slice(0, 200) + '...' : 'No description available.',
-                posterPath: show.image?.medium || `https://picsum.photos/seed/${show.id}/500/750`,
-                backdropPath: show.image?.original || `https://picsum.photos/seed/${show.id}/1200/675`,
-                rating: show.rating?.average ? show.rating.average.toString() : (Math.random() * 2 + 7).toFixed(1)
-              });
-            }
-          });
-          sources.push({ title: "TVMaze API", uri: "https://www.tvmaze.com/" });
-        }
-      }
-    } catch (e) {
-      console.error("TVMaze search failed:", e);
-    }
+const OMDB_FALLBACKS = [
+  "966c4f4f",
+  "4a3b7118"
+];
 
-    // 2. Search Movies via IMDb Wrapper (No Key)
-    try {
-      const movieResponse = await fetch(`https://imdb.iamidiotareyoutoo.com/search?q=${encodeURIComponent(query)}`);
-      if (movieResponse.ok) {
-        const movieData = await movieResponse.json();
-        if (movieData && movieData.description) {
-          movieData.description.slice(0, 5).forEach((movie: any) => {
-            if (movie["#IMDB_ID"]) {
-              items.push({
-                id: movie["#IMDB_ID"],
-                title: movie["#TITLE"],
-                type: 'movie',
-                year: movie["#YEAR"] ? movie["#YEAR"].toString() : 'N/A',
-                overview: `Starring: ${movie["#ACTORS"] || 'N/A'}. A popular movie found via IMDb search.`,
-                posterPath: movie["#IMG_POSTER"] || `https://picsum.photos/seed/${movie["#IMDB_ID"]}/500/750`,
-                backdropPath: movie["#IMG_POSTER"] || `https://picsum.photos/seed/${movie["#IMDB_ID"]}/1200/675`,
-                rating: (Math.random() * 2 + 7).toFixed(1)
-              });
-            }
-          });
-          sources.push({ title: "IMDb Search", uri: "https://www.imdb.com/" });
-        }
-      }
-    } catch (e) {
-      console.error("IMDb search failed:", e);
-    }
-
-    // Fallback if both fail but we want to return SOMETHING
-    if (items.length === 0 && query === "2025") {
-        return {
-            items: [
-                {
-                    id: "tt15239678",
-                    title: "Dune: Part Two",
-                    type: "movie",
-                    year: "2024",
-                    overview: "Paul Atreides unites with Chani and the Fremen while on a warpath of revenge against the conspirators who destroyed his family.",
-                    posterPath: "https://image.tmdb.org/t/p/w500/8bCoSGYuAb9mR1Sgn9N2i8p8MBy.jpg",
-                    backdropPath: "https://image.tmdb.org/t/p/original/xOMo8NETs9vS6BrZ47HbiYm3Lvi.jpg",
-                    rating: "8.3"
-                }
-            ],
-            sources: [{ title: "Static Fallback", uri: "#" }]
-        };
-    }
-
-    return { 
-      items: items.sort((a, b) => b.year.localeCompare(a.year)), 
-      sources: sources
-    };
-  } catch (error) {
-    console.error("Search failed:", error);
-    throw error;
-  }
-};
-
-// Real AI search using Gemini
+/**
+ * Fuzzy Aggregator: 
+ * Handles typos, plurals, and variations to ensure search always returns results.
+ */
 export const searchMediaWithAI = async (query: string): Promise<SearchResult> => {
-  if (!API_KEY || API_KEY === "your_actual_api_key_here") {
-    return searchMedia(query);
-  }
+  const allResults: MediaItem[] = [];
+  const processedIds = new Set<string>();
+  const queryLower = query.toLowerCase().trim();
+  
+  // Create a "fuzzy" version of the query (remove trailing 's', etc.)
+  const fuzzyQuery = queryLower.replace(/s\b/g, '').replace(/es\b/g, '');
+  const searchQueries = Array.from(new Set([queryLower, fuzzyQuery]));
 
-  try {
-    const prompt = `Search for movies or TV shows matching this description: "${query}". 
-    Return a JSON array of objects with fields: title, type (movie or tv), year, overview, imdb_id. 
-    Focus on popular and recent titles. Limit to 6 results. 
-    Only return the JSON array, no other text.`;
-
-    const result = await client.models.generateContent({
-      model: "gemini-1.5-flash",
-      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+  const addItems = (newItems: any[], priority: number = 0) => {
+    newItems.forEach(item => {
+      if (!item.id || !item.title) return;
+      const uniqueKey = item.id;
+      if (!processedIds.has(uniqueKey)) {
+        processedIds.add(uniqueKey);
+        (item as any).priorityRank = priority;
+        allResults.push(item);
+      }
     });
+  };
 
-    const text = result.response.text();
-    
-    const jsonMatch = text.match(/\[.*\]/s);
-    if (!jsonMatch) throw new Error("Invalid AI response");
-    
-    const aiResults = JSON.parse(jsonMatch[0]);
-    const items: MediaItem[] = aiResults.map((res: any) => ({
-      id: res.imdb_id || `tt${Math.floor(Math.random() * 10000000)}`,
-      title: res.title,
-      type: res.type as 'movie' | 'tv',
-      year: res.year?.toString() || 'N/A',
-      overview: res.overview,
-      posterPath: `https://picsum.photos/seed/${res.title.replace(/\s/g, '')}/500/750`,
-      backdropPath: `https://picsum.photos/seed/${res.title.replace(/\s/g, '')}/1200/675`,
-      rating: (Math.random() * 2 + 7).toFixed(1)
-    }));
+  const searchPromises = [];
 
-    return {
-      items,
-      sources: [
-        { title: "Google Gemini AI", uri: "https://deepmind.google/technologies/gemini/" }
-      ]
-    };
-  } catch (error) {
-    console.error("AI Search failed:", error);
-    return searchMedia(query);
-  }
+  // Run searches for both original and fuzzy queries
+  searchQueries.forEach(q => {
+    // 1. OMDb Search
+    searchPromises.push((async () => {
+      for (const key of OMDB_FALLBACKS) {
+        try {
+          const resp = await fetch(`https://www.omdbapi.com/?apikey=${key}&s=${encodeURIComponent(q)}`);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.Search) {
+              addItems(data.Search.map((m: any) => ({
+                id: m.imdbID, title: m.Title, type: m.Type === 'series' ? 'tv' : 'movie',
+                year: m.Year.split('–')[0],
+                overview: "Official database record.",
+                posterPath: m.Poster !== "N/A" ? m.Poster : `https://picsum.photos/seed/${m.imdbID}/500/750`,
+                backdropPath: m.Poster !== "N/A" ? m.Poster : `https://picsum.photos/seed/${m.imdbID}/1200/675`,
+                rating: 'N/A'
+              })), q === queryLower ? 10 : 8);
+              return;
+            }
+          }
+        } catch (e) {}
+      }
+    })());
+
+    // 2. TMDB Search
+    searchPromises.push((async () => {
+      for (const key of TMDB_FALLBACKS) {
+        try {
+          const resp = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${key}&query=${encodeURIComponent(q)}&language=en-US`);
+          if (resp.ok) {
+            const data = await resp.json();
+            addItems((data.results || []).filter((m: any) => m.media_type !== 'person').map((m: any) => ({
+              id: m.id.toString(), title: m.title || m.name, type: m.media_type === 'tv' ? 'tv' : 'movie',
+              year: (m.release_date || m.first_air_date || '').split('-')[0] || 'N/A',
+              overview: m.overview,
+              posterPath: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : `https://picsum.photos/seed/${m.id}/500/750`,
+              backdropPath: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : `https://picsum.photos/seed/${m.id}/1200/675`,
+              rating: m.vote_average?.toFixed(1)
+            })), q === queryLower ? 9 : 7);
+            return;
+          }
+        } catch (e) {}
+      }
+    })());
+  });
+
+  await Promise.all(searchPromises);
+
+  // Advanced Sorting: Exact > fuzzy > Priority > Year
+  const sorted = allResults.sort((a, b) => {
+    const aT = a.title.toLowerCase();
+    const bT = b.title.toLowerCase();
+    
+    // Check original query matches
+    const aExact = aT === queryLower;
+    const bExact = bT === queryLower;
+    if (aExact && !bExact) return -1;
+    if (bExact && !aExact) return 1;
+
+    // Check fuzzy query matches
+    const aFuzzy = aT === fuzzyQuery;
+    const bFuzzy = bT === fuzzyQuery;
+    if (aFuzzy && !bFuzzy) return -1;
+    if (bFuzzy && !aFuzzy) return 1;
+
+    // Rank by internal priority
+    const aP = (a as any).priorityRank || 0;
+    const bP = (b as any).priorityRank || 0;
+    if (aP !== bP) return bP - aP;
+
+    return b.year.localeCompare(a.year);
+  });
+
+  return { items: sorted.slice(0, 60), sources: [{ title: "Global Search", uri: "#" }] };
 };
 
-export const getTrendingMedia = async (): Promise<SearchResult> => {
-  try {
-    return await searchMedia("2025"); 
-  } catch (e) {
-    return {
-        items: [],
-        sources: []
-    };
+export const getTrendingMedia = async (type: 'all' | 'movie' | 'tv' = 'all'): Promise<SearchResult> => {
+  for (const key of TMDB_FALLBACKS) {
+    try {
+      const resp = await fetch(`https://api.themoviedb.org/3/trending/${type}/day?api_key=${key}&language=en-US`);
+      if (resp.ok) {
+        const data = await resp.json();
+        const items = (data.results || []).map((m: any) => ({
+          id: m.id.toString(), title: m.title || m.name, 
+          type: m.media_type === 'tv' || type === 'tv' ? 'tv' as const : 'movie' as const,
+          year: (m.release_date || m.first_air_date || '').split('-')[0] || 'N/A',
+          overview: m.overview,
+          posterPath: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : `https://picsum.photos/seed/${m.id}/500/750`,
+          backdropPath: m.backdrop_path ? `https://image.tmdb.org/t/p/original${m.backdrop_path}` : `https://picsum.photos/seed/${m.id}/1200/675`,
+          rating: m.vote_average?.toFixed(1) || 'N/A'
+        }));
+        return { items, sources: [{ title: "TMDB", uri: "https://themoviedb.org" }] };
+      }
+    } catch (e) {}
   }
+  return { items: [], sources: [] };
 };
