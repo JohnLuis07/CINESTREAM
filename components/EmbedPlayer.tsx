@@ -249,7 +249,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
         </div>
 
         <div className="p-3 md:p-4 bg-black/60 text-[8px] md:text-[10px] text-center text-neutral-500 uppercase tracking-[0.2em] md:tracking-[0.25em] font-black">
-          Anime Correction Index • 2Embed Default (Vsrc) • Metadata Verified
+          Anime Correction Index • Vsrc Default (2Embed) • Metadata Verified
         </div>
       </div>
       
