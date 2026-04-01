@@ -12,7 +12,7 @@ interface TVDetails {
 }
 
 const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
-  const [server, setServer] = useState<'Vsrc' | '2Embed' | 'SuperEmbed' | 'Embed.su' | 'Vidsrc.to'>('Vsrc');
+  const [server, setServer] = useState<'2Embed' | 'Vsrc' | 'SuperEmbed' | 'Embed.su' | 'Vidsrc.to'>('2Embed');
   const [season, setSeason] = useState(config.season || 1);
   const [episode, setEpisode] = useState(config.episode || 1);
   const [tvDetails, setTvDetails] = useState<TVDetails | null>(null);
@@ -164,7 +164,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
               <span className="w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-red-600 animate-pulse"></span>
               SOURCES
             </span>
-            {(['Vsrc', '2Embed', 'SuperEmbed', 'Embed.su', 'Vidsrc.to'] as const).map((s) => (
+            {(['2Embed', 'Vsrc', 'SuperEmbed', 'Embed.su', 'Vidsrc.to'] as const).map((s) => (
               <button 
                 key={s}
                 onClick={() => setServer(s)}
@@ -249,7 +249,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
         </div>
 
         <div className="p-3 md:p-4 bg-black/60 text-[8px] md:text-[10px] text-center text-neutral-500 uppercase tracking-[0.2em] md:tracking-[0.25em] font-black">
-          Anime Correction Index • Vsrc Default (2Embed) • Metadata Verified
+          Anime Correction Index • 2Embed Default (Vsrc) • Metadata Verified
         </div>
       </div>
       
