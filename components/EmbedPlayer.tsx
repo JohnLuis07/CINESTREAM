@@ -152,82 +152,84 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="w-full max-w-6xl flex flex-col h-[90vh] bg-neutral-900 rounded-3xl overflow-hidden shadow-2xl border border-white/10 relative">
+      <div className="w-full md:max-w-6xl flex flex-col h-full md:h-[90vh] bg-neutral-900 md:rounded-3xl overflow-hidden shadow-2xl border-x md:border border-white/10 relative">
         
-        <div className="flex flex-col md:flex-row items-center justify-between p-5 bg-black/40 border-b border-white/5 gap-4 z-20">
-          <div className="flex items-center gap-4 overflow-x-auto pb-1 scrollbar-hide w-full md:w-auto">
-            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] whitespace-nowrap flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+        <div className="flex flex-col md:flex-row items-center justify-between p-3 md:p-5 bg-black/40 border-b border-white/5 gap-3 md:gap-4 z-20">
+          <div className="flex items-center gap-3 md:gap-4 overflow-x-auto pb-1 scrollbar-hide w-full md:w-auto">
+            <span className="text-[8px] md:text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] whitespace-nowrap flex items-center gap-2">
+              <span className="w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-red-600 animate-pulse"></span>
               SOURCES
             </span>
             {(['2Embed - Vpls', 'SuperEmbed', 'Embed.su', 'Vidsrc.xyz'] as const).map((s) => (
               <button 
                 key={s}
                 onClick={() => setServer(s)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${server === s ? 'bg-red-600 text-white shadow-lg' : 'bg-white/5 text-neutral-400 hover:text-white'}`}
+                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${server === s ? 'bg-red-600 text-white shadow-lg' : 'bg-white/5 text-neutral-400 hover:text-white'}`}
               >
                 {s}
               </button>
             ))}
           </div>
 
-          {config.type === 'tv' && !isLoadingDetails && tvDetails && (
-            <div className="flex items-center gap-2 bg-white/5 p-1.5 rounded-2xl border border-white/5">
-              <div className="flex items-center gap-2 px-3">
-                <span className="text-[10px] font-black text-neutral-500 uppercase tracking-tighter">Season</span>
-                <select 
-                  value={season}
-                  onChange={(e) => setSeason(parseInt(e.target.value))}
-                  className="bg-transparent text-white font-black text-sm focus:outline-none cursor-pointer outline-none"
-                >
-                  {tvDetails.seasons.map(s => (
-                    <option key={s.season_number} value={s.season_number} className="bg-neutral-900 text-white">
-                      {s.season_number}
-                    </option>
-                  ))}
-                </select>
+          <div className="flex items-center justify-between w-full md:w-auto gap-2">
+            {config.type === 'tv' && !isLoadingDetails && tvDetails && (
+              <div className="flex items-center gap-1 md:gap-2 bg-white/5 p-1 md:p-1.5 rounded-xl md:rounded-2xl border border-white/5">
+                <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3">
+                  <span className="text-[8px] md:text-[10px] font-black text-neutral-500 uppercase tracking-tighter">S</span>
+                  <select 
+                    value={season}
+                    onChange={(e) => setSeason(parseInt(e.target.value))}
+                    className="bg-transparent text-white font-black text-xs md:text-sm focus:outline-none cursor-pointer outline-none"
+                  >
+                    {tvDetails.seasons.map(s => (
+                      <option key={s.season_number} value={s.season_number} className="bg-neutral-900 text-white">
+                        {s.season_number}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-px h-3 md:h-4 bg-white/10"></div>
+                <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3">
+                  <span className="text-[8px] md:text-[10px] font-black text-neutral-500 uppercase tracking-tighter">E</span>
+                  <select 
+                    value={episode}
+                    onChange={(e) => setEpisode(parseInt(e.target.value))}
+                    className="bg-transparent text-white font-black text-xs md:text-sm focus:outline-none cursor-pointer outline-none"
+                  >
+                    {Array.from({length: maxEpisodes}, (_, i) => (
+                      <option key={i + 1} value={i + 1} className="bg-neutral-900 text-white">
+                        {i + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="w-px h-4 bg-white/10"></div>
-              <div className="flex items-center gap-2 px-3">
-                <span className="text-[10px] font-black text-neutral-500 uppercase tracking-tighter">Episode</span>
-                <select 
-                  value={episode}
-                  onChange={(e) => setEpisode(parseInt(e.target.value))}
-                  className="bg-transparent text-white font-black text-sm focus:outline-none cursor-pointer outline-none"
-                >
-                  {Array.from({length: maxEpisodes}, (_, i) => (
-                    <option key={i + 1} value={i + 1} className="bg-neutral-900 text-white">
-                      {i + 1}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+            )}
 
-          {isLoadingDetails && config.type === 'tv' && (
-            <div className="flex items-center gap-2 text-neutral-500 animate-pulse">
-              <div className="w-4 h-4 border-2 border-neutral-700 border-t-red-600 rounded-full animate-spin"></div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/60">Syncing Series...</span>
-            </div>
-          )}
-          
-          <button onClick={onClose} className="p-2.5 text-white bg-white/5 hover:bg-red-600 rounded-full transition-all border border-white/5">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
+            {isLoadingDetails && config.type === 'tv' && (
+              <div className="flex items-center gap-2 text-neutral-500 animate-pulse">
+                <div className="w-3 md:w-4 h-3 md:h-4 border-2 border-neutral-700 border-t-red-600 rounded-full animate-spin"></div>
+                <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-white/60">Syncing...</span>
+              </div>
+            )}
+            
+            <button onClick={onClose} className="p-2 md:p-2.5 text-white bg-white/5 hover:bg-red-600 rounded-full transition-all border border-white/5 ml-auto">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" md:width="20" md:height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 relative bg-black">
           {error && config.type === 'tv' && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm text-center p-10">
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm text-center p-6 md:p-10">
               <div className="max-w-xs">
-                <h3 className="text-xl font-black text-white mb-2 uppercase italic">Sync Offline</h3>
-                <p className="text-neutral-500 text-xs mb-6">Could not verify the official episode list. Try manual mode below.</p>
+                <h3 className="text-lg md:text-xl font-black text-white mb-2 uppercase italic">Sync Offline</h3>
+                <p className="text-neutral-500 text-[10px] md:text-xs mb-6">Could not verify the official episode list.</p>
                 <button 
                   onClick={() => {setError(null); setTvDetails({ seasons: Array.from({length: 25}, (_, i) => ({season_number: i+1, episode_count: 100, is_year: false})) })}}
-                  className="bg-white/10 hover:bg-white/20 text-white px-8 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all"
+                  className="bg-white/10 hover:bg-white/20 text-white px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all"
                 >
-                  Enable Manual Mode
+                  Manual Mode
                 </button>
               </div>
             </div>
@@ -242,8 +244,8 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
           />
         </div>
 
-        <div className="p-4 bg-black/60 text-[10px] text-center text-neutral-500 uppercase tracking-[0.25em] font-black">
-          Anime Correction Index • 2Embed - Vpls Default • Metadata Verified
+        <div className="p-3 md:p-4 bg-black/60 text-[8px] md:text-[10px] text-center text-neutral-500 uppercase tracking-[0.2em] md:tracking-[0.25em] font-black">
+          Anime Correction Index • Vidsrc Default • Metadata Verified
         </div>
       </div>
       
