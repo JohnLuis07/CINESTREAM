@@ -33,7 +33,7 @@ const App: React.FC = () => {
     return () => { ++request.current; };
   }, [view, submitted, retry]);
 
-  const openPlayer = (item: MediaItem) => setActivePlayer({ id: item.id, type: item.type });
+  const openPlayer = (item: MediaItem) => setActivePlayer({ id: item.id, type: item.type, title: item.title });
   const featured = !submitted ? items[0] : null;
   const selectView = (next: View) => { setView(next); };
   const title = submitted ? `Results for “${submitted}”` : view === 'movie' ? 'Movies worth your evening' : view === 'tv' ? 'Your next binge starts here' : 'Find your next obsession';

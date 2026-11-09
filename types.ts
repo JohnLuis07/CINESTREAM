@@ -13,6 +13,7 @@ export interface MediaItem {
 }
 
 export interface PlayerConfig {
+  title?: string;
   id: string;
   type: ContentType;
   season?: number;

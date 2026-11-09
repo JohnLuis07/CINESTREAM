@@ -1,230 +1,87 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PlayerConfig } from '../types';
-import { fetchTMDB, hasTMDBCredentials } from '../services/tmdbService';
 import { PLAYER_SERVERS, PlayerServer, getPlayerUrl, supportsPlayer } from '../services/playerService';
-
-interface EmbedPlayerProps {
-  config: PlayerConfig;
-  onClose: () => void;
-}
-
-interface TVDetails {
-  seasons: { season_number: number; episode_count: number; is_year: boolean }[];
-}
-
+import { Episode, ShowDetails, hasAired, loadEpisodes, loadShow } from '../services/episodeService';
+interface EmbedPlayerProps { config: PlayerConfig; onClose: () => void; }
 const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
   const [server, setServer] = useState<PlayerServer>('Vidsrc.to');
-  const [season, setSeason] = useState(config.season || 1);
-  const [episode, setEpisode] = useState(config.episode || 1);
-  const [tvDetails, setTvDetails] = useState<TVDetails | null>(null);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(config.type === 'tv');
+  const [show, setShow] = useState<ShowDetails | null>(null);
+  const [season, setSeason] = useState<number | null>(null);
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [episode, setEpisode] = useState<number | null>(null);
+  const [loading, setLoading] = useState(config.type === 'tv');
+  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-
-  useEffect(() => {
-    if (config.type === 'tv') {
-      const fetchDetails = async () => {
-        setIsLoadingDetails(true);
-        setError(null);
-        let success = false;
-        const id = config.id;
-
-        // Try TMDB first as it has the cleanest numbering for Naruto/Boruto
-        if (hasTMDBCredentials) {
-          try {
-            let tmdbId = id;
-            if (id.startsWith('tt')) {
-              const findData = await fetchTMDB(`/find/${id}`, { external_source: 'imdb_id' });
-              {
-                const tvResult = findData.tv_results?.[0];
-                if (tvResult) tmdbId = tvResult.id.toString();
-              }
-            }
-
-            const data = await fetchTMDB(`/tv/${tmdbId}`);
-            {
-              const seasons = (data.seasons || [])
-                .map((s: any) => ({
-                  season_number: s.season_number,
-                  episode_count: s.episode_count,
-                  is_year: false
-                }))
-                .filter((s: any) => s.episode_count > 0 && s.season_number > 0);
-
-              if (seasons.length > 0) {
-                setTvDetails({ seasons });
-                if (!seasons.find(s => s.season_number === season)) {
-                  setSeason(seasons[0].season_number);
-                }
-                success = true;
-              }
-            }
-          } catch (e) {}
-        }
-
-        // Fallback to TVMaze with strict normalization for anime
-        if (!success) {
-          try {
-            // Numeric catalog IDs are TMDB IDs, not TVDB IDs.
-            if (!id.startsWith('tt')) throw new Error('IMDb ID required for TVmaze lookup');
-            const lookupUrl = `https://api.tvmaze.com/lookup/shows?imdb=${id}`;
-            
-            const lookupResp = await fetch(lookupUrl);
-            if (lookupResp.ok) {
-              const showData = await lookupResp.json();
-              const seasonsResp = await fetch(`https://api.tvmaze.com/shows/${showData.id}/seasons`);
-              const episodesResp = await fetch(`https://api.tvmaze.com/shows/${showData.id}/episodes`);
-              
-              if (seasonsResp.ok && episodesResp.ok) {
-                const seasonsData = await seasonsResp.json();
-                const episodesData = await episodesResp.json();
-                
-                let normalizedSeasons = seasonsData.map((s: any, index: number) => {
-                  const isYear = s.number > 1900;
-                  return {
-                    season_number: isYear ? index + 1 : s.number,
-                    episode_count: episodesData.filter((e: any) => e.season === s.number).length,
-                    is_year: isYear
-                  };
-                }).filter((s: any) => s.episode_count > 0);
-
-                if (normalizedSeasons.length > 0) {
-                  setTvDetails({ seasons: normalizedSeasons });
-                  setSeason(normalizedSeasons[0].season_number);
-                  success = true;
-                }
-              }
-            }
-          } catch (e) {}
-        }
-        
-        if (!success) {
-          setError("Metadata Unavailable");
-        }
-        setIsLoadingDetails(false);
-      };
-      fetchDetails();
-    }
-  }, [config.id, config.type]);
-
-  const currentSeasonData = tvDetails?.seasons.find(s => s.season_number === season);
-  const maxEpisodes = currentSeasonData?.episode_count || 0;
+  const [retry, setRetry] = useState(0);
+  const dialog = useRef<HTMLDivElement>(null);
+  const close = useRef<HTMLButtonElement>(null);
+  const isTV = config.type === 'tv';
 
   useEffect(() => {
-    if (maxEpisodes > 0 && episode > maxEpisodes) {
-      setEpisode(1);
-    }
-  }, [season, maxEpisodes]);
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden'; close.current?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+      if (event.key === 'Tab') {
+        const elements = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),select:not(:disabled),iframe') || []);
+        const first = elements[0], last = elements[elements.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    document.addEventListener('keydown', keydown);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', keydown); previous?.focus(); };
+  }, [onClose]);
 
-  const selectedServer = supportsPlayer(server, config.id) ? server : '2Embed';
-  const embedUrl = getPlayerUrl(selectedServer, { ...config, season, episode });
+  useEffect(() => {
+    let cancelled = false;
+    setShow(null); setSeason(null); setEpisodes([]); setEpisode(null); setError(null);
+    if (!isTV) { setLoading(false); return; }
+    setLoading(true);
+    loadShow(config.id).then(data => {
+      if (cancelled) return;
+      setShow(data);
+      setSeason(data.seasons.find(s => s.number === config.season)?.number ?? data.seasons[0].number);
+    }).catch(err => { if (!cancelled) setError(err.message); }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [config.id, config.type, config.season, retry]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="w-full md:max-w-6xl flex flex-col h-full md:h-[90vh] bg-neutral-900 md:rounded-3xl overflow-hidden shadow-2xl border-x md:border border-white/10 relative">
-        
-        <div className="flex flex-col md:flex-row items-center justify-between p-3 md:p-5 bg-black/40 border-b border-white/5 gap-3 md:gap-4 z-20">
-          <div className="flex items-center gap-3 md:gap-4 overflow-x-auto pb-1 scrollbar-hide w-full md:w-auto">
-            <span className="text-[8px] md:text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] whitespace-nowrap flex items-center gap-2">
-              <span className="w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-red-600 animate-pulse"></span>
-              SOURCES
-            </span>
-            {PLAYER_SERVERS.map((s) => (
-              <button 
-                key={s}
-                onClick={() => setServer(s)}
-                disabled={!supportsPlayer(s, config.id)}
-                title={supportsPlayer(s, config.id) ? `Play with ${s}` : 'Requires a TMDB ID'}
-                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold transition-all whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed ${selectedServer === s ? 'bg-red-600 text-white shadow-lg' : 'bg-white/5 text-neutral-400 hover:text-white'}`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+  useEffect(() => {
+    if (!show || season === null) return;
+    let cancelled = false;
+    setLoadingEpisodes(true); setEpisodes([]); setEpisode(null); setError(null);
+    loadEpisodes(show, season).then(data => {
+      if (cancelled) return;
+      setEpisodes(data);
+      const available = data.filter(hasAired);
+      setEpisode(available.find(e => season === config.season && e.number === config.episode)?.number ?? available[0]?.number ?? null);
+    }).catch(err => { if (!cancelled) setError(err.message); }).finally(() => { if (!cancelled) setLoadingEpisodes(false); });
+    return () => { cancelled = true; };
+  }, [show, season]);
 
-          <div className="flex items-center justify-between w-full md:w-auto gap-2">
-            {config.type === 'tv' && !isLoadingDetails && tvDetails && (
-              <div className="flex items-center gap-1 md:gap-2 bg-white/5 p-1 md:p-1.5 rounded-xl md:rounded-2xl border border-white/5">
-                <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3">
-                  <span className="text-[8px] md:text-[10px] font-black text-neutral-500 uppercase tracking-tighter">S</span>
-                  <select 
-                    value={season}
-                    onChange={(e) => setSeason(parseInt(e.target.value))}
-                    className="bg-transparent text-white font-black text-xs md:text-sm focus:outline-none cursor-pointer outline-none"
-                  >
-                    {tvDetails.seasons.map(s => (
-                      <option key={s.season_number} value={s.season_number} className="bg-neutral-900 text-white">
-                        {s.season_number}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-px h-3 md:h-4 bg-white/10"></div>
-                <div className="flex items-center gap-1 md:gap-2 px-2 md:px-3">
-                  <span className="text-[8px] md:text-[10px] font-black text-neutral-500 uppercase tracking-tighter">E</span>
-                  <select 
-                    value={episode}
-                    onChange={(e) => setEpisode(parseInt(e.target.value))}
-                    className="bg-transparent text-white font-black text-xs md:text-sm focus:outline-none cursor-pointer outline-none"
-                  >
-                    {Array.from({length: maxEpisodes}, (_, i) => (
-                      <option key={i + 1} value={i + 1} className="bg-neutral-900 text-white">
-                        {i + 1}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
+  const playbackId = show?.source === 'TMDB' ? show.id : config.id;
+  const selectedServer = supportsPlayer(server, playbackId) ? server : 'Vidsrc.to';
+  const selected = episodes.find(e => e.number === episode);
+  const available = episodes.filter(hasAired);
+  const index = available.findIndex(e => e.number === episode);
+  const embedUrl = !isTV || (season !== null && episode !== null && !loading && !loadingEpisodes && !error) ? getPlayerUrl(selectedServer, { ...config, id: playbackId, season: season ?? 1, episode: episode ?? 1 }) : null;
+  const title = config.title || show?.name || (isTV ? 'TV show' : 'Movie');
 
-            {isLoadingDetails && config.type === 'tv' && (
-              <div className="flex items-center gap-2 text-neutral-500 animate-pulse">
-                <div className="w-3 md:w-4 h-3 md:h-4 border-2 border-neutral-700 border-t-red-600 rounded-full animate-spin"></div>
-                <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-white/60">Syncing...</span>
-              </div>
-            )}
-            
-            <button onClick={onClose} className="p-2 md:p-2.5 text-white bg-white/5 hover:bg-red-600 rounded-full transition-all border border-white/5 ml-auto">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          </div>
+  return <div className="player-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="player-dialog" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="player-title">
+      <header className="player-header"><div><div className="eyebrow"><span className="live-dot" /> CINESTREAM THEATER</div><h2 id="player-title">{title}</h2></div><button ref={close} onClick={onClose} className="player-close" aria-label="Close player">×</button></header>
+      <div className={`player-body ${isTV ? 'with-episodes' : ''}`}>
+        <div className="player-main"><div className="video-stage">{embedUrl ? <iframe key={embedUrl} src={embedUrl} allowFullScreen allow="autoplay; encrypted-media; picture-in-picture" title={`${title}${isTV ? ` — Season ${season}, Episode ${episode}` : ''}`} referrerPolicy="no-referrer" /> : <div className="video-placeholder"><span className="placeholder-play">▶</span><h3>{loading || loadingEpisodes ? 'Loading your episode guide…' : error ? 'Episode guide unavailable' : 'No aired episodes in this season'}</h3><p>{error || 'Choose an available episode from the official episode list.'}</p>{error && <button className="primary-button" onClick={() => setRetry(n => n + 1)}>Try again</button>}</div>}</div>
+          <div className="playing-strip"><div><span className="eyebrow">{isTV ? 'NOW SELECTED' : 'NOW PLAYING'}</span><h3>{selected ? `S${season} · E${episode} — ${selected.name}` : title}</h3></div>{isTV && <div className="episode-navigation"><button aria-label="Previous episode" disabled={index <= 0 || loadingEpisodes} onClick={() => setEpisode(available[index - 1].number)}>←</button><button aria-label="Next episode" disabled={index < 0 || index >= available.length - 1 || loadingEpisodes} onClick={() => setEpisode(available[index + 1].number)}>→</button></div>}</div>
+          {selected && <div className="episode-description"><div>{selected.airDate}{selected.runtime ? ` · ${selected.runtime} min` : ''}</div><p>{selected.overview || 'No synopsis available for this episode.'}</p></div>}
+          <section className="player-sources"><div className="source-heading"><span className="eyebrow">PLAYBACK SOURCE</span><span>Having trouble? Try another source.</span></div><div className="source-buttons">{PLAYER_SERVERS.map(source => <button key={source} disabled={!supportsPlayer(source, playbackId)} aria-pressed={selectedServer === source} className={selectedServer === source ? 'selected' : ''} onClick={() => setServer(source)}>{source}{selectedServer === source && <span>●</span>}</button>)}</div></section>
         </div>
-
-        <div className="flex-1 relative bg-black">
-          {error && config.type === 'tv' && (
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/80 backdrop-blur-sm text-center p-6 md:p-10">
-              <div className="max-w-xs">
-                <h3 className="text-lg md:text-xl font-black text-white mb-2 uppercase italic">Sync Offline</h3>
-                <p className="text-neutral-500 text-[10px] md:text-xs mb-6">Could not verify the official episode list.</p>
-                <button 
-                  onClick={() => {setError(null); setTvDetails({ seasons: Array.from({length: 25}, (_, i) => ({season_number: i+1, episode_count: 100, is_year: false})) })}}
-                  className="bg-white/10 hover:bg-white/20 text-white px-6 md:px-8 py-2 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all"
-                >
-                  Manual Mode
-                </button>
-              </div>
-            </div>
-          )}
-          <iframe
-            key={embedUrl}
-            src={embedUrl}
-            className="absolute inset-0 w-full h-full border-none"
-            allowFullScreen
-            allow="autoplay; encrypted-media; picture-in-picture"
-            title="Video Player"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-
-        <div className="p-3 md:p-4 bg-black/60 text-[8px] md:text-[10px] text-center text-neutral-500 uppercase tracking-[0.2em] md:tracking-[0.25em] font-black">
-          Playing via {selectedServer} • If playback fails, choose another source
-        </div>
-      </div>
-      
-      <div className="absolute inset-0 -z-10" onClick={onClose}></div>
+        {isTV && <aside className="episode-panel"><div className="episode-panel-heading"><h3>Episodes</h3><span>{show ? `Guide by ${show.source}` : 'Episode guide'}</span></div><label className="season-label" htmlFor="season-picker">Select season</label><select id="season-picker" value={season ?? ''} disabled={!show || loading} onChange={e => { setEpisodes([]); setEpisode(null); setSeason(Number(e.target.value)); }}><option value="" disabled>Loading seasons…</option>{show?.seasons.map(s => <option key={s.number} value={s.number}>{s.name} · {s.count} episodes</option>)}</select>
+          <div className="episode-list" aria-busy={loading || loadingEpisodes}>{loading || loadingEpisodes ? <p className="episode-status" role="status">Loading actual episodes…</p> : error ? <div className="episode-status" role="alert"><p>{error}</p><button className="text-button" onClick={() => setRetry(n => n + 1)}>Retry episode guide ↻</button></div> : episodes.length === 0 ? <p className="episode-status">No episodes listed yet.</p> : episodes.map(ep => <button key={ep.number} disabled={!hasAired(ep)} aria-pressed={episode === ep.number} className={`episode-row ${episode === ep.number ? 'selected' : ''}`} onClick={() => setEpisode(ep.number)}><div className="episode-thumbnail">{ep.image ? <img src={ep.image} alt="" loading="lazy" /> : <span>{String(ep.number).padStart(2, '0')}</span>}<span className="episode-thumbnail-play">{episode === ep.number ? '▶' : ep.number}</span></div><div><span className="episode-number">EPISODE {ep.number}</span><h4>{ep.name || `Episode ${ep.number}`}</h4><small>{!hasAired(ep) ? ep.airDate ? `Upcoming · ${ep.airDate}` : 'Air date unconfirmed' : ep.runtime ? `${ep.runtime} min · ${ep.airDate}` : ep.airDate}</small></div></button>)}</div>
+        </aside>}
+      </div><footer className="player-footer"><span className="live-dot" /> {selectedServer} <span>Choose an episode to update playback. Provider availability may vary.</span></footer>
     </div>
-  );
+  </div>;
 };
-
 export default EmbedPlayer;
