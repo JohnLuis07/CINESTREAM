@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { PlayerConfig } from '../types';
+import { fetchTMDB, hasTMDBCredentials } from '../services/tmdbService';
+import { PLAYER_SERVERS, PlayerServer, getPlayerUrl, supportsPlayer } from '../services/playerService';
 
 interface EmbedPlayerProps {
   config: PlayerConfig;
@@ -12,18 +14,13 @@ interface TVDetails {
 }
 
 const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
-  const [server, setServer] = useState<'2Embed' | 'Vsrc' | 'SuperEmbed' | 'Embed.su' | 'Vidsrc.to'>('2Embed');
+  const [server, setServer] = useState<PlayerServer>('Vidsrc.to');
   const [season, setSeason] = useState(config.season || 1);
   const [episode, setEpisode] = useState(config.episode || 1);
   const [tvDetails, setTvDetails] = useState<TVDetails | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(config.type === 'tv');
   const [error, setError] = useState<string | null>(null);
 
-  const API_KEYS = [
-    "e547e17d4e91f3e62a571655cd1ccaff",
-    "15d1a681301b354e3e35b7067a929822",
-    "8d6d91abc388a1161130f9063c691c8d"
-  ];
 
   useEffect(() => {
     if (config.type === 'tv') {
@@ -34,21 +31,19 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
         const id = config.id;
 
         // Try TMDB first as it has the cleanest numbering for Naruto/Boruto
-        for (const key of API_KEYS) {
+        if (hasTMDBCredentials) {
           try {
             let tmdbId = id;
             if (id.startsWith('tt')) {
-              const findResp = await fetch(`https://api.themoviedb.org/3/find/${id}?api_key=${key}&external_source=imdb_id`);
-              if (findResp.ok) {
-                const findData = await findResp.json();
+              const findData = await fetchTMDB(`/find/${id}`, { external_source: 'imdb_id' });
+              {
                 const tvResult = findData.tv_results?.[0];
                 if (tvResult) tmdbId = tvResult.id.toString();
               }
             }
 
-            const resp = await fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${key}&language=en-US`);
-            if (resp.ok) {
-              const data = await resp.json();
+            const data = await fetchTMDB(`/tv/${tmdbId}`);
+            {
               const seasons = (data.seasons || [])
                 .map((s: any) => ({
                   season_number: s.season_number,
@@ -63,7 +58,6 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
                   setSeason(seasons[0].season_number);
                 }
                 success = true;
-                break;
               }
             }
           } catch (e) {}
@@ -72,9 +66,9 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
         // Fallback to TVMaze with strict normalization for anime
         if (!success) {
           try {
-            const lookupUrl = id.startsWith('tt') 
-              ? `https://api.tvmaze.com/lookup/shows?imdb=${id}`
-              : `https://api.tvmaze.com/lookup/shows?thetvdb=${id}`;
+            // Numeric catalog IDs are TMDB IDs, not TVDB IDs.
+            if (!id.startsWith('tt')) throw new Error('IMDb ID required for TVmaze lookup');
+            const lookupUrl = `https://api.tvmaze.com/lookup/shows?imdb=${id}`;
             
             const lookupResp = await fetch(lookupUrl);
             if (lookupResp.ok) {
@@ -123,36 +117,8 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
     }
   }, [season, maxEpisodes]);
 
-  const getEmbedUrl = () => {
-    const id = config.id;
-    // Always use the normalized season number for the player URL
-    const targetSeason = season;
-    
-    switch (server) {
-      case 'Vsrc':
-        return config.type === 'movie'
-          ? `https://vidsrc.xyz/embed/movie?imdb=${id}`
-          : `https://vidsrc.xyz/embed/tv?imdb=${id}&season=${targetSeason}&episode=${episode}`;
-      case '2Embed':
-        return config.type === 'movie'
-          ? `https://www.2embed.cc/embed/${id}`
-          : `https://www.2embed.cc/embedtv/${id}&s=${targetSeason}&e=${episode}`;
-      case 'SuperEmbed':
-        return config.type === 'movie'
-          ? `https://multiembed.mov/?video_id=${id}`
-          : `https://multiembed.mov/?video_id=${id}&s=${targetSeason}&e=${episode}`;
-      case 'Embed.su':
-        return config.type === 'movie'
-          ? `https://embed.su/embed/movie/${id}`
-          : `https://embed.su/embed/tv/${id}/${targetSeason}/${episode}`;
-      case 'Vidsrc.to':
-        return config.type === 'movie'
-          ? `https://vidsrc.to/embed/movie/${id}`
-          : `https://vidsrc.to/embed/tv/${id}/${targetSeason}/${episode}`;
-      default:
-        return `https://vidsrc.xyz/embed/movie?imdb=${id}`;
-    }
-  };
+  const selectedServer = supportsPlayer(server, config.id) ? server : '2Embed';
+  const embedUrl = getPlayerUrl(selectedServer, { ...config, season, episode });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-300">
@@ -164,11 +130,13 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
               <span className="w-1.5 md:w-2 h-1.5 md:h-2 rounded-full bg-red-600 animate-pulse"></span>
               SOURCES
             </span>
-            {(['2Embed', 'Vsrc', 'SuperEmbed', 'Embed.su', 'Vidsrc.to'] as const).map((s) => (
+            {PLAYER_SERVERS.map((s) => (
               <button 
                 key={s}
                 onClick={() => setServer(s)}
-                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold transition-all whitespace-nowrap ${server === s ? 'bg-red-600 text-white shadow-lg' : 'bg-white/5 text-neutral-400 hover:text-white'}`}
+                disabled={!supportsPlayer(s, config.id)}
+                title={supportsPlayer(s, config.id) ? `Play with ${s}` : 'Requires a TMDB ID'}
+                className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl text-[10px] md:text-xs font-bold transition-all whitespace-nowrap disabled:opacity-30 disabled:cursor-not-allowed ${selectedServer === s ? 'bg-red-600 text-white shadow-lg' : 'bg-white/5 text-neutral-400 hover:text-white'}`}
               >
                 {s}
               </button>
@@ -218,7 +186,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
             )}
             
             <button onClick={onClose} className="p-2 md:p-2.5 text-white bg-white/5 hover:bg-red-600 rounded-full transition-all border border-white/5 ml-auto">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" md:width="20" md:height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
           </div>
         </div>
@@ -239,7 +207,8 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
             </div>
           )}
           <iframe
-            src={getEmbedUrl()}
+            key={embedUrl}
+            src={embedUrl}
             className="absolute inset-0 w-full h-full border-none"
             allowFullScreen
             allow="autoplay; encrypted-media; picture-in-picture"
@@ -249,7 +218,7 @@ const EmbedPlayer: React.FC<EmbedPlayerProps> = ({ config, onClose }) => {
         </div>
 
         <div className="p-3 md:p-4 bg-black/60 text-[8px] md:text-[10px] text-center text-neutral-500 uppercase tracking-[0.2em] md:tracking-[0.25em] font-black">
-          Anime Correction Index • 2Embed Default (Vsrc) • Metadata Verified
+          Playing via {selectedServer} • If playback fails, choose another source
         </div>
       </div>
       

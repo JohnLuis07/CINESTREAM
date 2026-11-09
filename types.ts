@@ -2,7 +2,7 @@
 export type ContentType = 'movie' | 'tv';
 
 export interface MediaItem {
-  id: string; // TMDB ID
+  id: string; // Numeric TMDB ID or IMDb ID prefixed with tt
   title: string;
   type: ContentType;
   overview: string;
